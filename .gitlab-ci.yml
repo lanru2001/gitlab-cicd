@@ -1,0 +1,101 @@
+image:
+  name: hashicorp/terraform:light
+  entrypoint:
+    - "/usr/bin/env"
+    - "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+    - "AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION}"
+
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: always
+
+before_script:
+  - rm -rf .terraform  
+  - terraform --version
+  - apk add aws-cli findutils make python3 py3-pip jq
+
+stages:
+  - set_env_variables
+  - initialize
+  - validate
+  - plan
+  - apply  
+
+set_env_variables:
+  stage: set_env_variables
+  environment:    
+    name: $ENV
+  script:
+    - cd $ENV_PROJECT_PATH 
+    # Set environment name variable
+    - export ENV_UPPERCASE=`echo "${ENV}" | tr '[a-z]' '[A-Z]'`
+      
+    # Set AWS credential variables
+    #- KEY_ID_STRING="AWS_ACCESS_KEY_ID_${ENV_UPPERCASE}" # Concatenate environment to end of AWS credential name; this compound value is saved in GitLab variables
+    #- SECRET_ACCESS_STRING="AWS_SECRET_ACCESS_KEY_${ENV_UPPERCASE}" # Concatenate environment to end of AWS credential name; this compound value is saved in GitLab variables
+    #- export AWS_ACCESS_KEY_ID=$(eval echo \$$KEY_ID_STRING)
+    #- export AWS_SECRET_ACCESS_KEY=$(eval echo \$$SECRET_ACCESS_STRING)
+    - echo $IAM_ROLE
+    - aws sts assume-role --role-arn "$IAM_ROLE" --role-session-name TF_Gitlab_ACCEESS --region us-east-1 >> creds.json   
+    - export AWS_ACCESS_KEY_ID=$(jq -r '.Credentials.AccessKeyId' creds.json)  
+    - export AWS_SECRET_ACCESS_KEY=$(jq -r '.Credentials.SecretAccessKey' creds.json)   
+    - export AWS_SESSION_TOKEN=$(jq -r '.Credentials.SessionToken' creds.json)
+
+    # Echo values into .env file, which will be saved as an artifact for subsequent jobs
+    - echo "AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}" >> .env
+    - echo "AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}" >> .env
+    - echo "AWS_SESSION_TOKEN=${AWS_SESSION_TOKEN}" >> .env
+    - cat .env
+  artifacts:
+    paths:
+      - "./$ENV_PROJECT_PATH/.env"
+    expire_in: 10 minutes
+
+initialize:
+  dependencies:
+    - set_env_variables
+  stage: initialize
+  script:
+    - cd $ENV_PROJECT_PATH 
+    - export $(cat .env | xargs)
+    - cat .env
+    - ENV=${ENV} make init
+
+validate:
+  stage: validate
+  dependencies:
+    - set_env_variables
+    - initialize
+  script:
+    - cd $ENV_PROJECT_PATH 
+    - export $(cat .env | xargs)
+    - ENV=${ENV} make validate
+
+plan:
+  stage: plan
+  script:
+    - cd $ENV_PROJECT_PATH 
+    - export $(cat .env | xargs)
+    - ENV=${ENV} make plan
+  dependencies:
+    - set_env_variables
+    - initialize
+    - validate  
+  when: manual
+
+apply:
+  stage: apply
+  script:
+    - cd $ENV_PROJECT_PATH 
+    - export $(cat .env | xargs)
+    - pip install aws_lambda_typing boto3 requests
+    - ENV=${ENV} make apply_auto_approve
+  dependencies:
+    - set_env_variables
+    - initialize
+    - validate  
+    - plan  
+  when: manual
