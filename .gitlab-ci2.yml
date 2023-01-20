@@ -1,7 +1,7 @@
 stages:
 - Pretest
 - Test
-- Integration
+- Dev
 - Staging
 - Production
 
@@ -78,11 +78,11 @@ variables:
       - docker push $ECR_REGISTRY:$TAG   
 
 "deploy to Dev":
-
+  stage: Dev
   before_script:
   - pip3 install --no-cache-dir awscli
   script:
-  - aws ecs register-task-definition \
+    - aws ecs register-task-definition \
       --memory 512 \
       --cpu 256 \
       --task-role-arn $TASK_ROLE_ARN \
@@ -90,16 +90,16 @@ variables:
       --network-mode $NETWORK_MODE \
       --requires-compatibilities $REQ_COMPATIBILITIES \
       --cli-input-json "file://taskdef.json"
-      --aws ecs update-service  --service $ECS_SERVICE  --cluster $ECS_CLUSTER  --updateService --force-new-deployment 
-      --aws ecs wait services-stable --service $ECS_SERVICE --cluster $ECS_CLUSTER 
+    - aws ecs update-service  --service $ECS_SERVICE  --cluster $ECS_CLUSTER  --updateService --force-new-deployment 
+    - aws ecs wait services-stable --service $ECS_SERVICE --cluster $ECS_CLUSTER 
 
 "deploy to QA":
-
+  stage: Staging
   before_script:
   - pip3 install --no-cache-dir awscli
   when: manual
   script:
-  - aws ecs register-task-definition \
+    - aws ecs register-task-definition \
       --memory 512 \
       --cpu 256 \
       --task-role-arn $TASK_ROLE_ARN \
@@ -107,16 +107,16 @@ variables:
       --network-mode $NETWORK_MODE \
       --requires-compatibilities $REQ_COMPATIBILITIES \
       --cli-input-json "file://taskdef.json"
-  - aws ecs update-service  --service $ECS_SERVICE  --cluster $ECS_CLUSTER  --updateService --force-new-deployment 
-  - aws ecs wait services-stable --service $ECS_SERVICE --cluster $ECS_CLUSTER
+    - aws ecs update-service  --service $ECS_SERVICE  --cluster $ECS_CLUSTER --task-definition amazon-ecs-sample --updateService --desired-count 3--force-new-deployment 
+    - aws ecs wait services-stable --service $ECS_SERVICE --cluster $ECS_CLUSTER
 
 "deploy to Prod":
-
+  stage: Production
   before_script:
   - pip3 install --no-cache-dir awscli
   when: manual
   script:
-  - aws ecs register-task-definition \
+    - aws ecs register-task-definition \
       --memory 512 \
       --cpu 256 \
       --task-role-arn $TASK_ROLE_ARN \
@@ -124,5 +124,6 @@ variables:
       --network-mode $NETWORK_MODE \
       --requires-compatibilities $REQ_COMPATIBILITIES \
       --cli-input-json "file://taskdef.json"
-  - aws ecs update-service  --service $ECS_SERVICE  --cluster $ECS_CLUSTER  --updateService --force-new-deployment 
-  - aws ecs wait services-stable --service $ECS_SERVICE --cluster $ECS_CLUSTER   
+    - aws ecs update-service  --service $ECS_SERVICE  --cluster $ECS_CLUSTER  --updateService --force-new-deployment 
+    - aws ecs wait services-stable --service $ECS_SERVICE --cluster $ECS_CLUSTER 
+
