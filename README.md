@@ -1,4 +1,4 @@
-# terraform-gitlab-cicd
+# Gitlab-cicd-pipeline
 
 - Create aws iam role in the aws console
 - Add the IAM_ROLE arn in the variable 
