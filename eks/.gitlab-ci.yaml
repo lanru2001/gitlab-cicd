@@ -1,0 +1,24 @@
+
+
+stages:
+  - containerization
+  - deploy
+containerization:
+  stage: containerization # must match the stage name declared above
+  script:
+    # Build the container image
+    - docker build -t my-registry/my-application .
+    # Push the container image to the registry
+    - docker push my-registry/my-application
+    # Cleanup by removing the local image
+    - docker image rm my-registry/my-application
+deployment:
+  stage: deploy # must match the stage name declared above
+  script:
+    # create/update the kubernetes resources
+    - kubectl apply -f /k8s/deployment.yml
+    - kubectl apply -f /k8s/service.yml
+    # Restart the deployment so as to pull the latest version of the container image
+    - kubectl rollout restart deployment/my-application
+  environment:
+    name: production
